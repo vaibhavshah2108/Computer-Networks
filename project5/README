@@ -1,0 +1,91 @@
+---------------------------------------------------ROLL YOUR OWN CDN - PROJECT 5--------------------------------------------------------------------------
+
+
+Description
+
+Goal is to implement a Content Distribution Network. We have been assigned EC2 servers one origin server and 8 replica servers. The origin server contains   all the content. Replica servers may or may not have the content. When a client requests for some content, initially the nearest local name server will find the nearest replica server and send the request to the that server. The server serves the content if it has the content already else it gets the content fromthe origin server and serves the content. The origin server runs on port 8080
+
+Running the scripts
+
+run the following scripts in order
+./[deploy|run|stop]CDN -p <port> -o <origin> -n <name> -u <username> -i <keyfile> 
+
+where port is the port that the httpserver will bind to , origin is the name of the origin server for the CDN, username is the account name for logging in   and keyfile is the path to the private key for logging into nodes. The port numbers should be a high numbered port between 40000 - 65535.
+
+The deployCDN module deploys the httpserver module onto all the EC2 servers and the dnsserver module to cs5700cdnpoject.ccs.neu.edu.
+runCDN module runs the deployed httpserver and dnsserver modules. stopCDN stops running the servers.
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+High level approach
+
+For content to be delivered as fast as possible , it is important to distribute/spread the content 
+and retrieve it in minimal time as possible. First find the nearest replica server. To find the 
+
+
+For the httpserver we  serve content if the server names and arguments do not match. The httpserver module uses a database and compression techniques to     maximize the capacity of persistant storage. We have used zlib libray to store content as a blob and thus allows us to cache more data.
+Caching reduces the latency and the time to serve from the cache with the original is uncomparable.
+
+httpserver is basically multithreaded i.e. it can serve multiple requests at the sametime. The cache is stored as a database which keeps track of the number of hits per page, compressed contents as BLOB and the path . This only increases the capacity to cache ,which means that the content served from cache is    faster than the directly requesting from the origin. The replacement strategy used is LRU (Least Recently Used) technique. 
+
+To find the best server we use the geo location of the client ip and redirect it to the nearest server. 
+
+Further Details on DNSSERVER:
+To build a dns server, we had three possible choices to map request to best/nearest replica, namely
+->Active Measurements
+->Geolocation
+->Passive Measurements
+
+->After having a discussion about the strategy that we could use, we decided to implement geolocation. 
+  This is mainly because geoIP always provides us with thegeographically nearest path. 
+->Use of passive measurements might not give best performances for the initial requests, 
+  hence we did not want to take a risk of that.
+->Active measurements had to be implemented perfectly, for example we cannot ping the replicas 
+  and calculate the RTT frequently, we had to calculate RTT in an efficient manner. Hence, we perfomed 
+  various tests initially with geoIP that returned the nearest replica servers and the requested 
+  content was also being downloaded in sufficiently quick time. This encouraged us in choosing Geolocation as our strategy.
+
+->We have used ipinfo.io API to get the latitude and longitude of the location based on the IP address. 
+  Using this API we get a JSON object from which we parsethe latitude and longitude. From the latitudes 
+  and longitudes of the replica servers and the client, we calculate the spherical distance from the converted 
+  spherical coordinates and calculate the distance between them. We store the distances as the value and the
+  replica server IP as a key. Also, we maintain another dictionary of client IP's and the replica to which 
+  they were mapped to, this enhances the speed if the same client requests again as the retrieval from dictionary
+  takes constant time. We then build the DNS answer by incrementing the answer count by one and also including the
+  nearest ip address in the answer section and send the response to the client.
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+Performance Enhancement Techniques
+
+->We have used a dictionary to store the replica ip to which the client was mapped to. 
+  Hence this allows for a constant time retrieval of the replica ip if the same client 
+  makes a request in the near future. 
+->We have used multithreading in both DNSSERVER and HTTPSERVER to serve simulataneous requests from clients.
+->Used sqlite which is a light-weight database to store the content. 
+->The contents are stored compressed and stored as BLOB which enables us to cache more data.
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+Challenges
+
+->Constructing DNS packet was a bit tricky since every minute detail had to be understood before implementing it.
+->Most challengin part: Deciding between using Geo location, passive measurements and active measurements 
+Using Geolocation was faster when compared to active measurements using scamper,so finally decided to implement geolocation
+->Deciding on what caching technique to use to store the contents in the database was a tricky task as we had to choose from multiple options.
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+Future Enhancements
+
+->Active Measurements - By probing the network and finding the RTTs,bandwidth usage for pings from each 
+  replica server to the dnsserver, we redirect the client to the server with the least RTT. 
+  Scamper as suggested could be a useful tool for measuring RTTs
+->DHTs - The use of Distributed Hash tables to store the contents as a key value store
+->Caching the contents by precomputing the most requested content would increase the probability of cache hits
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+Contributions
+
+->Vinay worked on the DNS module and
+->Dhanush worked on http module
+Further, Both of us implemented the deploy scripts and the both of us tested and debugged the program together found glitches and fixed bugs in our program.
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -1,0 +1,251 @@
+#! /usr/bin/env python
+
+import urllib
+import json
+import math
+#from threading import Thread
+import thread
+import sys
+import os
+import socket
+from struct import pack,unpack
+
+#Get the source address
+def getSourceIP():
+	s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+	s.connect(("david.choffnes.com",80))
+	ipaddr = s.getsockname()[0]
+	s.close()
+	#print type(ipaddr)
+	return ipaddr
+
+#Get the latitute and longitude of the ip address
+def getlatitude_longitude(source_ip):
+
+	
+	response = urllib.urlopen(url = 'http://www.telize.com/geoip/'+str(source_ip)).read()
+	loc_dict = json.loads(response)
+        #lat_long = loc_dict["loc"]
+        #print "Dictionary",loc_dict
+        jlatitude = loc_dict["latitude"]
+        jlongitude = loc_dict["longitude"]
+        #print lat_long
+        #lat_long_sep = lat_long.split(',')
+        latitude = float(jlatitude)
+        longitude = float(jlongitude)
+	#print lat_long
+	#print "city",loc_dict["city"]
+	return latitude, longitude
+	#print "Latitude",latitude
+	#print "Longitude",longitude
+
+
+ 
+def cal_distance(lat1,long1,lat_long):
+ 
+	
+	    lat2 = lat_long[0]
+	    long2 = lat_long[1]	
+								  	   
+	    degrees_to_radians = math.pi/180.0								 	# Convert co-ordinates to spherical co-ordinates
+         
+	  
+	    phi1 = (90.0 - lat1)*degrees_to_radians
+	    phi2 = (90.0 - lat2)*degrees_to_radians
+         
+	   
+	    theta1 = long1*degrees_to_radians
+	    theta2 = long2*degrees_to_radians
+         
+	    										              
+	    cos = (math.sin(phi1)*math.sin(phi2)*math.cos(theta1 - theta2) +  math.cos(phi1)*math.cos(phi2))    # Calculating spherical distance from the above computed spherical coordinates.
+	    arc = math.acos( cos )
+ 
+												     	    
+	    return arc * 6373											 # Convert arc length into kilometers
+	
+
+
+def replica_servers(lat1,long1,client_request_dict,request_ip):
+
+		
+	replica_servers_loc = {
+				'52.0.73.113':[39.0437,-77.4875],
+				'52.16.219.28':[53.3331,-6.2489],
+				'52.11.8.29':[45.8399,-119.7006],
+				'52.8.12.101':[37.3394,-121.8950],
+				'52.28.48.84':[50.1167,8.6833],
+				'52.68.12.77':[35.6850,139.7514],
+				'52.74.143.5':[1.2931,103.8558],
+				'52.64.63.125':[-33.8615,151.2055],
+				'54.94.214.108':[-23.4733,-46.6658]}
+	
+	for each_replica in replica_servers_loc:
+		replica_servers_loc[each_replica] = cal_distance(lat1,long1,replica_servers_loc[each_replica])
+	#print replica_servers_loc
+	#print "minimum",
+	nearest_ip = min(replica_servers_loc, key=replica_servers_loc.get)
+	client_request_dict[request_ip] = nearest_ip
+	#print client_request_dict
+	return nearest_ip,client_request_dict
+
+
+
+def main():
+
+	if len(sys.argv) != 5:
+		print "Please specify valid number of arguments"
+		sys.exit(0)
+
+	if sys.argv[1] != "-p":
+		print "Please enter a port number with -p argument"
+		sys.exit(0)
+	else:
+		port = int(sys.argv[2])
+
+	
+	if sys.argv[3] != "-n" and sys.argv[4] != "cs5700cdn.example.com":
+		print "Please provide the cdn specific name"
+		sys.exit(0)
+	else:
+		cdnname = sys.argv[4]
+
+	s1 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)	
+
+	source_ip = getSourceIP()
+	s1.bind((source_ip,port))	
+	client_request_dict = {}
+	while True:
+		data = s1.recvfrom(653555)
+		thread.start_new_thread(serve_each_request,(s1,data,client_request_dict,cdnname))
+		
+	s1.close()
+
+def serve_each_request(s1,data,client_request_dict,cdnname):
+	
+
+	
+		send_info = data[1]
+	
+		request_ip = send_info[0]
+		if request_ip in client_request_dict:
+			#print "inside dict,retriving"
+			nearest_ip = client_request_dict[request_ip]
+			#print client_request_dict
+			#print "Client_IP",request_ip
+			#print "nearest ip",nearest_ip
+		else:	
+			#print "in else, adding to dict"
+			lat1,long1 = getlatitude_longitude(request_ip)
+			nearest_ip,client_request_dict = replica_servers(lat1,long1,client_request_dict,request_ip)
+			#print "Client_IP",request_ip
+			#print "nearest ip",nearest_ip
+	#send_info = data[1]		#Retrieve the destination ip and port to which the DNS reply has to be sent
+		unpack_data(data,s1,send_info,nearest_ip,cdnname)	#Call unpack_data procedure 
+
+
+
+
+def unpack_data(data,s1,send_info,nearest_ip,cdnname):
+
+	new_data = data[0].strip()
+        unpacked_data = unpack('!6H',new_data[:12])     
+	no_questions = unpacked_data[2]
+	ans_count = 1
+	ns_count = 0
+	ar_count = 0
+	#pack_header1 = pack('!H',)
+	pack_header1 = new_data[0:2]	#Retrieve the identifier from the header
+	flags = '\x81\x80'		#Set the flags in the header
+	pack_header2 = pack('!4H',no_questions,ans_count,ns_count,ar_count)	
+	header = pack_header1 + flags + pack_header2		#Concate all the parts of the header that was constructed
+
+
+        remaining_data = new_data[12:]				#Strip off the header in the data
+        len_octet = unpack('!B',remaining_data[0])		#Unpack data to get the length of a sub-domain
+	#len_octet = len_octet[0]
+	begin_octet = 1
+	#packing_arg
+	name = ""
+        label_count = 0						#Counter to keep a count of the number of labels
+
+        while (len_octet[0] != 0):
+
+		#len_octet1 = len_octet[0]
+		#label_count = label_count + 1			
+		#print "Number of lables",label_count
+		#print "++++++++"
+		end_octet = begin_octet + len_octet[0]	
+		unpack_octet = str(len_octet[0]) + 's'		#Unpack data according to the length of the subdomain indicated
+		
+		if name:
+			name = name + '.' + unpack(unpack_octet,remaining_data[begin_octet:end_octet])[0]
+		else:
+			name = unpack(unpack_octet,remaining_data[begin_octet:end_octet])[0]
+	
+		begin_octet = end_octet + 1			#Move the begin pointer to the next character of the end pointer
+		len_octet_unpack = remaining_data[end_octet]
+		len_octet = unpack('!B',len_octet_unpack)	#Move the end pointer by 5 ahead, to indicate the end of domain names.(inclusive of /00 to specify the null label of the root)
+	end_octet = end_octet + 5
+	
+	
+	if cdnname != name:
+		sys.exit(0)
+	else:
+		dns_packet = form_dns_answer(s1,header,end_octet,new_data,send_info,nearest_ip) #Call form_dns_answer procedure to build the final packet.
+	return 
+	
+		
+
+
+#Form the dns answer and the complete dns packet
+def form_dns_answer(s1,header,end_octet,new_data,send_info,nearest_ip):
+	
+	name = 0xC00C						
+	a_record_type = 0x0001
+	class_type = 0x0001
+	ttl = 60
+	len_data = 4
+
+	dns_ans_packet = pack('!HHHLH4s',name,a_record_type,class_type,ttl,len_data,socket.inet_aton(nearest_ip))
+	question = new_data[12:12+end_octet] 
+	dns_packet = header + question + dns_ans_packet		#Concatenate the header, question and answer to form a complete dns packet
+	s1.sendto(dns_packet,send_info)
+	
+
+
+	
+
+main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+'''
+if __name__ == "__main__":
+	main(sys.argv[0:])
+'''

@@ -1,0 +1,125 @@
+#! /usr/bin/env python
+from BaseHTTPServer import HTTPServer,BaseHTTPRequestHandler
+import urllib
+import sys
+import os
+import sqlite3
+import binascii
+import zlib
+from threading import Thread
+
+def main():
+	# Extract the Port and origin address from command line
+	if sys.argv[1] == "-p":
+		Port = int(sys.argv[2])
+	else:
+		print "Enter a port number between 40000-60000"
+		sys.exit(0)
+	global origin
+	if sys.argv[3] == "-o":
+		origin = str(sys.argv[4])
+	else:
+		print  "Enter the correct origin server address"
+		sys.exit(0) 
+	h = HTTPServer(('',Port),RequestHandler)
+	try:
+		h.serve_forever()
+	except:
+		h.server_close()
+	
+
+	
+class RequestHandler(BaseHTTPRequestHandler):
+	
+
+	def http_server_on_thread(s,*args):
+		#parse the get request,obtain origin server and path 
+		#check if the request is cached, if yes respond with the last used response, else respond with content
+		#create request to origin and respond with whatever the origin responds
+		#print s.path
+		Path = s.path
+		db = sqlite3.connect('content.db')
+		d = db.cursor()
+		#create a table	
+		# Use Last Recently Used Cache optimization and remove that entry when size reaches SIZE_MAX
+		d.execute('''CREATE TABLE IF NOT EXISTS Cache(Path TEXT,Content BLOB,Hits INT);''')
+		#check if path is present in cache, if yes serve from cache
+		pathobj = d.execute("SELECT Path FROM Cache WHERE Path =:Path",{"Path":Path})
+		Path = d.fetchone()
+		if Path == None:
+			#fetch content from origin
+			request_to_origin = 'http://'+origin+':8080'+s.path #Check for s.path
+			#print request_to_origin		
+			content =  urllib.urlopen(request_to_origin)
+			content = content.read()
+			data = buffer(zlib.compress(content))
+			#print "data ",data
+			#blob = bin(int(binascii.hexlify(content), 16))
+			#print "Serving from Origin"			
+			#update cache table
+			hits = 1
+			#row = (s.path,content,hits)
+			#print "content-type",type(content),type(s.path)
+			#Measure size of cache
+			filestats = os.stat('content.db')
+			cache_size = filestats.st_size
+			# As long as new entry can be accomodated in the cache, insert the contents into the cache    9961472
+                     	
+			if ((cache_size + len(content)) < 9961472):
+				d.execute("INSERT INTO Cache(Path,Content,Hits) VALUES(?,?,?)",(s.path,data,hits))
+			else:
+				#Delete the entry with the least number of hits and insert the last obtained content into the cache
+				d.execute("DELETE FROM Cache WHERE Path = (SELECT Path FROM Cache WHERE hits = (SELECT MIN(hits) FROM Cache))")
+				d.execute("INSERT INTO Cache(Path,Content,Hits) VALUES(?,?,?)",(s.path,data,hits))
+			'''
+			#while ((cache_size + len(content)) > 9961472):
+			while cache_size + len(content) > 8000:
+				#Delete the entry with the least number of hits and insert the last obtained content into the cache
+				d.execute("DELETE FROM Cache WHERE Path = (SELECT Path FROM Cache WHERE hits = (SELECT MIN(hits) FROM Cache))")
+					
+			d.execute("INSERT INTO Cache(Path,Content,Hits) VALUES(?,?,?)",(s.path,data,hits))
+			'''			
+		else:
+			#fetch content from cache
+			contentobj = d.execute("SELECT Content FROM Cache WHERE Path =:Path",{"Path":s.path})
+			content = d.fetchone()
+			#Increment the no of Hits 
+			hitsobj = d.execute("SELECT Hits FROM Cache WHERE Path =:Path",{"Path":s.path})
+			Hits = d.fetchone()
+			Hits = Hits[0]
+			Hits = Hits + 1
+			#print "hitcount ",Hits
+			#Decompress the contents so that it can be sent as a part of response data
+			content = zlib.decompress(content[0])
+			# Update the no of hits in the database
+			d.execute("UPDATE Cache SET Hits =:Hits WHERE Path=:Path",{"Hits":Hits,"Path":s.path})			
+			#print "Serving from cache"
+		
+		#d.execute("SELECT * FROM Cache")
+		#print d.fetchall()
+#--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------		
+		#Save the changes
+		db.commit()
+		#Close the connection after saving the changes
+		db.close()
+				
+		#print content
+		#include response from origin
+		#Building response to the GET request
+		s.send_response(200)
+		s.send_header("Content-type","text/html")
+		s.end_headers()
+		s.wfile.write(content)	
+
+	def do_GET(s):
+		#Initiate a thread and run the method which serves requests on these threads
+		try:
+			t = Thread(target= s.http_server_on_thread())	
+			t.start()
+		except IOError:
+			s.send_error(404,'File Not FOund: %' %s.path)
+				
+
+if __name__ == '__main__':
+	main()
+	

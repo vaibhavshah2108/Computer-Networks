@@ -1,0 +1,53 @@
+#! /bin/bash
+
+
+dns_server='cs5700cdnproject.ccs.neu.edu'
+
+replica_servers=("ec2-52-0-73-113.compute-1.amazonaws.com" "ec2-52-16-219-28.eu-west-1.compute.amazonaws.com" "ec2-52-11-8-29.us-west-2.compute.amazonaws.com"
+"ec2-52-8-12-101.us-west-1.compute.amazonaws.com" "ec2-52-28-48-84.eu-central-1.compute.amazonaws.com" "ec2-52-68-12-77.ap-northeast-1.compute.amazonaws.com"
+"ec2-52-74-143-5.ap-southeast-1.compute.amazonaws.com" "ec2-52-64-63-125.ap-southeast-2.compute.amazonaws.com" "ec2-54-94-214-108.sa-east-1.compute.amazonaws.com")
+
+
+
+while getopts "p:o:n:u:i:" arguments
+do
+	case $arguments in
+		p) port=$OPTARG;;
+
+		o) origin=$OPTARG;;
+
+		n) name=$OPTARG;;
+
+		u) user=$OPTARG;;
+
+		i) key=$OPTARG;;
+
+		?) echo "Invalid arguement"
+		exit 1;;
+		esac
+done
+
+
+ssh -i $key $user@$dns_server 'killall -u'$user' python'					#Kill the dnsserver
+
+
+
+
+for each_replica in "${replica_servers[@]}"; do     				#kill the httpserver at each replica server
+	ssh -i $key $user@$each_replica 'killall -u'$user' python' 
+done
+
+
+
+
+
+		   
+		
+
+
+
+
+
+
+		
+		
