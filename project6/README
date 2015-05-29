@@ -1,0 +1,88 @@
+++++++++++++++++++++++++++++++++++++++Project-6 Meddle++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+==============================================================================================================
+High-Level-View and changes to scripts: 
+
+In this project, I installed meddle for more than a week and run applications and installed many other applications to check if they are 
+reliable. By changing grepForStuff.sh(To run the script on a specific date, change the date to which you want to check on in the variable in $filename) i.e  by looping through the files in a directory, and adding specific grep commands to specifically capture 
+PII's like username,macaddress,latitude,longitude,IMEI number,email-address etc, I observed some of sensitive information being leaked by applications which I have listed below. On comparing the leaks that I could found to the leaks meddle displayed, I found that most of the leaks were captured by meddle too.
+The information missed by meddle was regarding location(latitude,longitude) and email-id(twice). I have posted these leak on piazza PII leak thread. 
+
+
+======================Tasks======================================================================================
+
+Task 1: What are your apps doing with the network?
+
+	Task 1.1 : How many sites are contacted by each app that you use?
+
+		  Below are the statistics of the number of sites contacted by different applications
+
+			   Application		Number of sites
+			    Default 		61
+			    Facebook		2
+			    NPR			1
+			    Safari		1
+		            GoogleAdsense	3
+			    *[fbiab*            20
+
+		
+	Task 1.2 : Does that traffic seem legitimate?
+
+				The traffic seems legitimate but lots of trackers are being contacted. I was not aware that apps contact so many trackers.
+				Without changing the script, for apps like meet24, the location was being sent with plain text.  
+  
+	
+	Task 1.3 : Is there anything surprising in your data?
+
+				Analysing through the scripts provided, there was not much surprise, but one thing that caught my mind is the number of 
+				trackers that are contacted by applications. Contacting too many trackers is not a good sign at all because they might reveal				     sensitive information regarding the end-users. The surprising thing was, without modifying the script, for an app called     				  meet24, the latitude and longitude was being leaked. 
+
+
+==========================================================================================================================================================
+
+Task 2: Identify PII
+
+	Task 2.1 : How you modified the script?
+
+	In order to identify the Personally Identifiable Information, the shell script grepForStuff.sh had to be modified.
+	Below are the list of changes that I made to find any personally identifiable information.
+	->Since the script took a file name as a command line argument, providing log files for each date is a tiresome task, hence I am looping through
+	  the date directory to parse all the log files present it. 
+	->Added my IMEI number, my multiple email-id's.
+	->Added grep to match my username that I use for most of my applications, friends phone number, friends name, friends username.
+	->Also added grep to match my device model, build-number and the device code-name
+	
+	Task 2.2 : What PII you found?
+	By modifying the script as mentioned above, I could find the below mentioned PII:
+	->Location: Latitude and Longitude. I found many location leaks. More than 8 leaks alone on 24-Apr-2015. It was difficult to determine the applicatio			ns name through the script because the "contact-agent" field of the request did not contain the required information. But since I recentl		     y installed meet24 and there were not much leaks of location prior to installing it, my guess is that it was leaked by meet24.
+	->Email-id: My professional email-id was leaked twice by the browser(chrome)  
+	->Partner_Username : My friends username with whom I chatted using meet24
+	
+	Task 2.3 : What are the implications of the information being leaked
+	->The informations being leaked are very sensitive information. The username field leaked can be used to know the true identity of a person. 
+	In my case,  partner_username was leaked with the birthdate. Having this information, it is extremely easy to identify the person which is highly    	     alarming. 
+	->My professional email-id was leaked which can put me and potentialy the server which contains my email-id into trouble. It is not too difficult for          an attacker to "mail-bomb" using a person's email-id. Mail-bombing can overwhelm the server's mailbox resulting in a denial of service. Hence,               email-id's are a very sensitive information that should not be leaked.  
+	->By leaking information like Location, the persons whereabouts can be known and the person can be tracked down. It is highly dangerous. These are    	       some of the personal informations that not many would like to see it being leaked. 
+	
+	Other than PII, I have also found that my cell-phone's build-number being leaked. This is not a PII but it is an information that can be used to             launch an attack on a specific set of devices.
+	For example: Each android version-build has a specific vulnerability(if found) that would be patched in it's next version. Now, The total set of             attacks that an attacker has to pick/invent on a device whose build-number is not known, is very large. By knowing the build number before hand, it          is possible for an attacker launch attacks that are specific to that known Version and build-number of Android.(This is because the attacker knows           that the vulnerability was not fixed in this specific build-number)
+	
+
+============================================================================================================================================
+Note: -> I have posted only those leaks (on the PII leak thread on Piazza) that were not detected by meddle.	
+=============================================================================================================================================
+
+Task 3: Fill out surveys and label PII
+
+	I have labelled the PII leaked as correct/incorrect on the my meddle page. Also, I have submitted(registered-id:hegde.vi@husky.neu.edu) the                  google-form giving a thorough feedback and my experience with meddle. 
+
+
+
+==============================================================================================================================================
+
+Challenges Faced:
+		The main challenge in this project was on how to determine the application name that caused the leak. By analyzing the tcpdump, I closely                    observed that the "User-Agent" field in the request can be used to determine the applications name. This works for some apps but not for all		  apps, this is beacuse not all applications fill in the User-Agent field. Hence, this process of checking the applications name would not work                for all. For those app names not determined, it is possible to make an educated guess on the app, since it was installed on my phone, I                      exactly know that date on which it was installed, and the username, passwd specific to that app, based on this it is possible to analyze the 		 trace and determine which app caused the leak.
+
+===============================================================================================================================================			   
+
+
