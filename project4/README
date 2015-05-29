@@ -1,0 +1,37 @@
+RAW SOCKETS
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Instructions to run the file:
+sudo ./rawhttpget [url]
+Before running the program run the following command to drop the TCP RST packets to avoid the kernel from killing the remote connections by instructing the kernel to drop the outgoing TCP RST packets
+iptables -A OUTPUT -p tcp --tcp-flags RST RST -j DROP
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+DESCRIPTION:
+Task is to request a url using http GET and download its contents. In doing this we essentially pack and unpack the TCP/IP packets. 
+At the top level we have handled HTTP 200 OK and in case of a non 200 status code, it prints and exits execution.
+The goal of this assignment is to use raw sockets to bypass the operating system's network stack. We have used a socket of AF_INET family with type SOCK_RAW/IPPROTO_TCP to filter TCP packets. We have constructed the IP header according to the specification by setting the correct version(IPv4), header length, total length, protocol identifier,source address, destination address and checksum. Similarly we construct the TCP header according to the specification by setting the source port , destination port, sequence number(which we generate at random between the range 0 and 90000), acknowledgement number, data offset, flags and checksum. We construct a Pseudo header to compute the checksum of the TCP header.
+Finally we wrap the IP header,the TCP header and data to construct the packet and send the request in the form of a packet.
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+HANDSHAKE:
+We first send the packet by setting the SYN flag. The server immediately replies with a SYN-ACK. By ACKing the received packet, that handshake is completed, which means we are ready to send data. 
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+SENDING and RECEIVING Data
+To send data we have to set the PSH flag.
+While receiving a packet we unpack the packet similar to the way we packed them. We filter out the packets by calculating the expected sequence number of the receiving packet. Every time we receive a packet, we ACK that packet requesting for the next packet. The ACK is basically the previous sequence number plus the length of data received in the previous packet. If we don't receive the expected packet within three seconds, we request for the same packet again.
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+EXTRA CREDIT:
+Implementing the Ethernet layer was challenging. We used an ARP request to get the Gateway MAC address. To get the gateway IP address we used subprocess and shlex lexical analyser to extract the gateway IP. After obtaining the source MAC address and destination MAC address we costruct ethernet frame and if it is an ARP request we set the Ether type as 0x800 and if its IP then 0x806. ARP is done only once to get the gteway MAC address.
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+CHALLENGES:
+> ARP integration - Integrating the program we wrote for getting the gateway MAC address with the original code was a challenge. We encountered a lot of errors which was handled in increments.
+> Initially there was a phase where only SYN would reach while we wouldn't get a SYN-ACK. After spending hours on this we realised that the wireshark trace had the IP total length as 0. After calculating this right we could download the data properly.
+
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+CONTRIBUTIONS:
+From day one we have been pair programming. All the modules had equal contributions from both of us. While one wrote the code ,the other would kept a check on the correctness and logic. We would alternate between each other in intervals.
+
