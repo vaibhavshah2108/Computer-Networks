@@ -1,5 +1,5 @@
 # Computer-Networks
-This repository contains six projects that were part of CS5700 curriculum. 
+This repository contains five projects that were part of CS5700 curriculum. 
 
 Project-1 : Simple Client
 This assignment is intended to familiarize ourselves with writing simple network code. 
