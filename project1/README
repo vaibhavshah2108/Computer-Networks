@@ -1,6 +1,5 @@
 Project: Sockets
-Team name: reddevils
-Team members: hegde5 (NEUID: 001787000), dhanush (NEUID: 001729003)
+
 Description:
 Task is to establish a successful connection to the server at cs5700sp15.ccs.neu.edu using sockets and evaluate all the expressions sent by the server to obtain the secret flag.
 We used python to write the program and our first goal was to establish a succesful connection.We used the socket module provided by python to establish the connection.
